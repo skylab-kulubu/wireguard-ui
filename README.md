@@ -54,12 +54,12 @@ Environment=SMTP_PORT=587
 Environment=SMTP_USERNAME=mail@gmail.com
 Environment=SMTP_PASSWORD="application password here"
 Environment=SMTP_AUTH_TYPE=LOGIN
-#Environment=SMTP_ENCRYPTION=NONE
+;Environment=SMTP_ENCRYPTION=NONE
 Environment=EMAIL_SUBJECT="SKYDAYS VPN"
 Environment=EMAIL_TEMPLATE_FILE=/opt/wireguard-ui/email-template.html
 Environment=WGUI_SERVER_INTERFACE_ADDRESSES="10.19.11.1/24"
-Environment=WGUI_SERVER_POST_UP_SCRIPT="iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE"
-Environment=WGUI_SERVER_POST_DOWN_SCRIPT="iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE"
+;Environment=WGUI_SERVER_POST_UP_SCRIPT="iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE"
+;Environment=WGUI_SERVER_POST_DOWN_SCRIPT="iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE"
 ExecStart=/usr/bin/wireguard-ui --data-dir="/var/lib/wireguard-ui"
 
 ; Limit the number of file descriptors; see `man systemd.exec` for more limit settings.
