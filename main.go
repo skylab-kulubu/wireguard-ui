@@ -64,6 +64,15 @@ const (
 `
 )
 
+var (
+	// Email configuration flags
+	flagEmailSubject            string
+	flagEmailContent            string
+	flagEmailTemplateFile       string
+	flagAutoEmailOnCreate       bool
+	flagAutoEmailOnClientUpdate bool
+)
+
 // embed the "templates" directory
 //
 //go:embed templates/*
@@ -94,6 +103,13 @@ func init() {
 	flag.StringVar(&flagBasePath, "base-path", util.LookupEnvOrString("BASE_PATH", flagBasePath), "The base path of the URL")
 	flag.StringVar(&flagSubnetRanges, "subnet-ranges", util.LookupEnvOrString("SUBNET_RANGES", flagSubnetRanges), "IP ranges to choose from when assigning an IP for a client.")
 	flag.IntVar(&flagSessionMaxDuration, "session-max-duration", util.LookupEnvOrInt("SESSION_MAX_DURATION", flagSessionMaxDuration), "Max time in days a remembered session is refreshed and valid.")
+
+	// Email configuration flags
+	flag.StringVar(&flagEmailSubject, "email-subject", util.LookupEnvOrString("EMAIL_SUBJECT", defaultEmailSubject), "Subject for client configuration emails")
+	flag.StringVar(&flagEmailContent, "email-content", util.LookupEnvOrString("EMAIL_CONTENT", defaultEmailContent), "Content for client configuration emails (HTML allowed)")
+	flag.StringVar(&flagEmailTemplateFile, "email-template-file", util.LookupEnvOrString("EMAIL_TEMPLATE_FILE", ""), "Path to custom email template file")
+	flag.BoolVar(&flagAutoEmailOnCreate, "auto-email-on-create", util.LookupEnvOrBool("AUTO_EMAIL_ON_CREATE", false), "Automatically send email when a new client is created")
+	flag.BoolVar(&flagAutoEmailOnClientUpdate, "auto-email-on-client-update", util.LookupEnvOrBool("AUTO_EMAIL_ON_CLIENT_UPDATE", false), "Automatically send email when a client is updated")
 
 	var (
 		smtpPasswordLookup   = util.LookupEnvOrString("SMTP_PASSWORD", flagSmtpPassword)
@@ -234,13 +250,27 @@ func main() {
 		sendmail = emailer.NewSmtpMail(util.SmtpHostname, util.SmtpPort, util.SmtpUsername, util.SmtpPassword, util.SmtpHelo, util.SmtpNoTLSCheck, util.SmtpAuthType, util.EmailFromName, util.EmailFrom, util.SmtpEncryption)
 	}
 
+	// Determine effective email subject and content
+	// Priority: flag value > template file > default constant
+	emailSubject := flagEmailSubject
+	emailContent := flagEmailContent
+
+	// If template file is specified, load content from file
+	if flagEmailTemplateFile != "" {
+		if data, err := os.ReadFile(flagEmailTemplateFile); err == nil {
+			emailContent = string(data)
+		} else {
+			log.Warnf("Failed to read email template file: %v, using flag/content value", err)
+		}
+	}
+
 	app.GET(util.BasePath+"/test-hash", handler.GetHashesChanges(db), handler.ValidSession)
 	app.GET(util.BasePath+"/about", handler.AboutPage())
 	app.GET(util.BasePath+"/_health", handler.Health())
 	app.GET(util.BasePath+"/favicon", handler.Favicon())
-	app.POST(util.BasePath+"/new-client", handler.NewClient(db), handler.ValidSession, handler.ContentTypeJson)
-	app.POST(util.BasePath+"/update-client", handler.UpdateClient(db), handler.ValidSession, handler.ContentTypeJson)
-	app.POST(util.BasePath+"/email-client", handler.EmailClient(db, sendmail, defaultEmailSubject, defaultEmailContent), handler.ValidSession, handler.ContentTypeJson)
+	app.POST(util.BasePath+"/new-client", handler.NewClient(db, sendmail, emailSubject, emailContent, flagAutoEmailOnCreate), handler.ValidSession, handler.ContentTypeJson)
+	app.POST(util.BasePath+"/update-client", handler.UpdateClient(db, sendmail, emailSubject, emailContent, flagAutoEmailOnClientUpdate), handler.ValidSession, handler.ContentTypeJson)
+	app.POST(util.BasePath+"/email-client", handler.EmailClient(db, sendmail, emailSubject, emailContent), handler.ValidSession, handler.ContentTypeJson)
 	app.POST(util.BasePath+"/send-telegram-client", handler.SendTelegramClient(db), handler.ValidSession, handler.ContentTypeJson)
 	app.POST(util.BasePath+"/client/set-status", handler.SetClientStatus(db), handler.ValidSession, handler.ContentTypeJson)
 	app.POST(util.BasePath+"/remove-client", handler.RemoveClient(db), handler.ValidSession, handler.ContentTypeJson)

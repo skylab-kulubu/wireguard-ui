@@ -10,6 +10,11 @@ A web user interface to manage your WireGuard setup.
 - Authentication
 - Manage extra client information (name, email, etc.)
 - Retrieve client config using QR code / file / email / Telegram
+- **Enhanced Email Automation**:
+  - Configurable email subject and content with placeholders
+  - Auto-send emails on client creation/updates
+  - Personalized emails with client and server data
+  - Support for custom HTML email templates
 
 ![wireguard-ui 0.3.7](https://user-images.githubusercontent.com/37958026/177041280-e3e7ca16-d4cf-4e95-9920-68af15e780dd.png)
 
@@ -71,6 +76,11 @@ docker-compose up
 | `SMTP_AUTH_TYPE`              | The SMTP authentication type. Possible values: `PLAIN`, `LOGIN`, `NONE`                                                                                                                                                                                                             | `NONE`                             |
 | `SMTP_ENCRYPTION`             | The encryption method. Possible values: `NONE`, `SSL`, `SSLTLS`, `TLS`, `STARTTLS`                                                                                                                                                                                                  | `STARTTLS`                         |
 | `SMTP_HELO`                   | Hostname to use for the HELO message. smtp-relay.gmail.com needs this set to anything but `localhost`                                                                                                                                                                               | `localhost`                        |
+| `EMAIL_SUBJECT`               | Subject line for client configuration emails. Supports placeholders like `{{.ClientName}}`                                                                                                                                                                                          | `Your wireguard configuration`     |
+| `EMAIL_CONTENT`               | Content for client configuration emails (HTML allowed). Supports placeholders for personalization                                                                                                                                                                                   | Default HTML content               |
+| `EMAIL_TEMPLATE_FILE`         | Path to custom email template file. If provided, overrides `EMAIL_CONTENT`                                                                                                                                                                                                          | N/A                                |
+| `AUTO_EMAIL_ON_CREATE`        | Automatically send email when a new client is created (if client has email address)                                                                                                                                                                                                 | `false`                            |
+| `AUTO_EMAIL_ON_CLIENT_UPDATE` | Automatically send email when a client is updated (if client has email address)                                                                                                                                                                                                     | `false`                            |
 | `TELEGRAM_TOKEN`              | Telegram bot token for distributing configs to clients                                                                                                                                                                                                                              | N/A                                |
 | `TELEGRAM_ALLOW_CONF_REQUEST` | Allow users to get configs from the bot by sending a message                                                                                                                                                                                                                        | `false`                            |
 | `TELEGRAM_FLOOD_WAIT`         | Time in minutes before the next conf request is processed                                                                                                                                                                                                                           | `60`                               |
@@ -96,6 +106,50 @@ These environment variables are used to set the defaults used in `New Client` di
 | `WGUI_DEFAULT_CLIENT_EXTRA_ALLOWED_IPS`     | Comma-separated-list of CIDRs for the `Extra Allowed IPs` field. (default empty)                | N/A         |
 | `WGUI_DEFAULT_CLIENT_USE_SERVER_DNS`        | Boolean value [`0`, `f`, `F`, `false`, `False`, `FALSE`, `1`, `t`, `T`, `true`, `True`, `TRUE`] | `true`      |
 | `WGUI_DEFAULT_CLIENT_ENABLE_AFTER_CREATION` | Boolean value [`0`, `f`, `F`, `false`, `False`, `FALSE`, `1`, `t`, `T`, `true`, `True`, `TRUE`] | `true`      |
+
+## Email Template Placeholders
+
+When using custom email content or templates, you can use the following placeholders for personalization:
+
+| Placeholder           | Description                    | Example                           |
+|-----------------------|--------------------------------|-----------------------------------|
+| `{{.ClientName}}`     | Client's display name          | `John Doe`                        |
+| `{{.ClientEmail}}`    | Client's email address         | `john@example.com`                |
+| `{{.CreatedAt}}`      | Account creation timestamp     | `2024-03-15 10:30:00 UTC`         |
+| `{{.UpdatedAt}}`      | Last update timestamp          | `2024-03-15 11:45:00 UTC`         |
+| `{{.PublicKey}}`      | Client's WireGuard public key  | `abc123...`                       |
+| `{{.Endpoint}}`       | VPN server endpoint            | `vpn.example.com:51820`           |
+| `{{.AllowedIPs}}`     | Allowed IP ranges              | `0.0.0.0/0, ::/0`                 |
+| `{{.ServerPublicKey}}`| Server's WireGuard public key  | `def456...`                       |
+| `{{.DNS}}`            | DNS servers                    | `1.1.1.1, 1.0.0.1`               |
+
+### Example Email Content
+
+```html
+<h1>Welcome {{.ClientName}}!</h1>
+<p>Your WireGuard VPN configuration is ready.</p>
+<p><strong>Server:</strong> {{.Endpoint}}</p>
+<p><strong>Created:</strong> {{.CreatedAt}}</p>
+<p>Please find your configuration files attached.</p>
+```
+
+### Example Usage
+
+```bash
+# Set custom email content with placeholders
+export EMAIL_SUBJECT="VPN Config for {{.ClientName}}"
+export EMAIL_CONTENT="<p>Hi {{.ClientName}}, your VPN is ready! Connect to {{.Endpoint}}</p>"
+
+# Enable auto-email on client creation
+export AUTO_EMAIL_ON_CREATE=true
+
+# Use custom email template file
+export EMAIL_TEMPLATE_FILE="/path/to/custom-template.html"
+
+./wireguard-ui
+```
+
+A sample HTML email template with professional styling is available at `examples/email-template.html`.
 
 ### Docker only
 

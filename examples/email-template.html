@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WireGuard VPN Configuration</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .content {
+            background: #f9f9f9;
+            padding: 30px;
+            border-radius: 10px;
+        }
+        .info-box {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #667eea;
+        }
+        .label {
+            font-weight: bold;
+            color: #667eea;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            color: #888;
+            font-size: 12px;
+        }
+        .button {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 12px 30px;
+            border-radius: 25px;
+            text-decoration: none;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>SKY DAYS VPN</h1>
+        <p>VPN Konfigürasyonunuz hazır!</p>
+    </div>
+    
+    <div class="content">
+        <p>Merhaba <strong>{{.ClientName}}</strong>,</p>
+        
+        <p>WireGuard VPN yapılandırmanız oluşturuldu. Kişisel yapılandırmanız bu e-postaya ekli olarak bulunabilir.</p>
+        <!-- <div class="info-box">
+            <p><span class="label">Client Name:</span> {{.ClientName}}</p>
+            <p><span class="label">Server Endpoint:</span> {{.Endpoint}}</p>
+            <p><span class="label">Allowed IPs:</span> {{.AllowedIPs}}</p>
+            <p><span class="label">DNS Servers:</span> {{.DNS}}</p>
+            <p><span class="label">Your Public Key:</span> {{.PublicKey}}</p>
+            <p><span class="label">Server Public Key:</span> {{.ServerPublicKey}}</p>
+            <p><span class="label">Created At:</span> {{.CreatedAt}}</p>
+        </div> -->
+        
+        <h3>Nasıl Kullanılır:</h3>
+        <ol>
+            <li>Eklerdeki dosyayı indir <code>wg0.conf</code></li>
+            <li>Wireguard'ı bilgisayarına ya da sanal makinene indir</li>
+            <li>Konfigürasyon dosyasını içer aktar ya da <code>/etc/wireguard/wg0.conf</code> yoluna kaydet</li>
+            <li>VPN'e bağlan</li>
+        </ol>
+        
+        <p>Eğer bir QR kod tarayıcı uygulamanız varsa, ekli <code>wg.png</code> resmini tarayarak yapılandırmayı mobil cihazlarda içeri aktarabilirsiniz.</p>
+        
+        <p>SKY DAYS Ekibi</p>
+    </div>
+    
+    <div class="footer">
+        <p>Bu bir otomasyon mesajıdır</p>
+        <p>Gönderilme Tarihi: {{.CreatedAt}}</p>
+    </div>
+</body>
+</html>

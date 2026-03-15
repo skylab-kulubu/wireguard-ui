@@ -32,6 +32,73 @@ import (
 
 var usernameRegexp = regexp.MustCompile("^\\w[\\w\\-.]*$")
 
+// EmailTemplateData holds data for email template personalization
+type EmailTemplateData struct {
+	ClientName      string
+	ClientEmail     string
+	CreatedAt       string
+	UpdatedAt       string
+	PublicKey       string
+	Endpoint        string
+	AllowedIPs      string
+	ServerPublicKey string
+	DNS             string
+}
+
+// PersonalizeEmail replaces placeholders in email content with client data
+func PersonalizeEmail(content string, client *model.Client, server *model.Server, globalSettings *model.GlobalSetting) string {
+	// Get server settings for personalization
+	dnsServers := "1.1.1.1, 1.0.0.1"
+	if globalSettings != nil && len(globalSettings.DNSServers) > 0 {
+		dnsServers = strings.Join(globalSettings.DNSServers, ", ")
+	}
+
+	endpoint := ""
+	if globalSettings != nil && globalSettings.EndpointAddress != "" {
+		endpoint = globalSettings.EndpointAddress
+	} else if client.Endpoint != "" {
+		endpoint = client.Endpoint
+	}
+
+	allowedIPs := ""
+	if len(client.AllowedIPs) > 0 {
+		allowedIPs = strings.Join(client.AllowedIPs, ", ")
+	} else if len(client.ExtraAllowedIPs) > 0 {
+		allowedIPs = strings.Join(client.ExtraAllowedIPs, ", ")
+	}
+
+	serverPublicKey := ""
+	if server != nil && server.KeyPair != nil {
+		serverPublicKey = server.KeyPair.PublicKey
+	}
+
+	data := EmailTemplateData{
+		ClientName:      client.Name,
+		ClientEmail:     client.Email,
+		CreatedAt:       client.CreatedAt.Format("2006-01-02 15:04:05 UTC"),
+		UpdatedAt:       client.UpdatedAt.Format("2006-01-02 15:04:05 UTC"),
+		PublicKey:       client.PublicKey,
+		Endpoint:        endpoint,
+		AllowedIPs:      allowedIPs,
+		ServerPublicKey: serverPublicKey,
+		DNS:             dnsServers,
+	}
+
+	// Replace placeholders
+	result := content
+	result = strings.ReplaceAll(result, "{{.ClientName}}", data.ClientName)
+	result = strings.ReplaceAll(result, "{{.ClientEmail}}", data.ClientEmail)
+	result = strings.ReplaceAll(result, "{{.CreatedAt}}", data.CreatedAt)
+	result = strings.ReplaceAll(result, "{{.UpdatedAt}}", data.UpdatedAt)
+	result = strings.ReplaceAll(result, "{{.PublicKey}}", data.PublicKey)
+	result = strings.ReplaceAll(result, "{{.Endpoint}}", data.Endpoint)
+	result = strings.ReplaceAll(result, "{{.AllowedIPs}}", data.AllowedIPs)
+	result = strings.ReplaceAll(result, "{{.ServerPublicKey}}", data.ServerPublicKey)
+	result = strings.ReplaceAll(result, "{{.DNS}}", data.DNS)
+
+	return result
+}
+
 // Health check handler
 func Health() echo.HandlerFunc {
 	return func(c echo.Context) error {
@@ -409,7 +476,7 @@ func GetClient(db store.IStore) echo.HandlerFunc {
 }
 
 // NewClient handler
-func NewClient(db store.IStore) echo.HandlerFunc {
+func NewClient(db store.IStore, mailer emailer.Emailer, emailSubject, emailContent string, autoEmail bool) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		var client model.Client
 		c.Bind(&client)
@@ -511,6 +578,60 @@ func NewClient(db store.IStore) echo.HandlerFunc {
 		}
 		log.Infof("Created wireguard client: %v", client)
 
+		// Auto-email the client configuration if enabled and email is provided
+		if autoEmail && client.Email != "" && mailer != nil {
+			go func() {
+				// Get global settings for personalization
+				globalSettings, _ := db.GetGlobalSettings()
+
+				// Personalize the email content
+				personalizedContent := PersonalizeEmail(emailContent, &client, &server, &globalSettings)
+				personalizedSubject := PersonalizeEmail(emailSubject, &client, &server, &globalSettings)
+
+				// Generate QR code settings
+				qrCodeSettings := model.QRCodeSettings{
+					Enabled:    true,
+					IncludeDNS: true,
+					IncludeMTU: true,
+				}
+				clientData, err := db.GetClientByID(client.ID, qrCodeSettings)
+				if err != nil {
+					log.Errorf("Cannot generate client config for auto-email: %v", err)
+					return
+				}
+
+				// Build config
+				config := util.BuildClientConfig(*clientData.Client, server, globalSettings)
+
+				cfgAtt := emailer.Attachment{Name: "wg0.conf", Data: []byte(config)}
+				var attachments []emailer.Attachment
+				if clientData.Client.PrivateKey != "" {
+					qrdata, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(clientData.QRCode, "data:image/png;base64,"))
+					if err != nil {
+						log.Errorf("Cannot decode QR code for auto-email: %v", err)
+						return
+					}
+					qrAtt := emailer.Attachment{Name: "wg.png", Data: qrdata}
+					attachments = []emailer.Attachment{cfgAtt, qrAtt}
+				} else {
+					attachments = []emailer.Attachment{cfgAtt}
+				}
+
+				err = mailer.Send(
+					clientData.Client.Name,
+					clientData.Client.Email,
+					personalizedSubject,
+					personalizedContent,
+					attachments,
+				)
+				if err != nil {
+					log.Errorf("Failed to send auto-email to client %s: %v", client.Email, err)
+				} else {
+					log.Infof("Auto-email sent successfully to client: %s", client.Email)
+				}
+			}()
+		}
+
 		return c.JSON(http.StatusOK, client)
 	}
 }
@@ -547,6 +668,10 @@ func EmailClient(db store.IStore, mailer emailer.Emailer, emailSubject, emailCon
 		globalSettings, _ := db.GetGlobalSettings()
 		config := util.BuildClientConfig(*clientData.Client, server, globalSettings)
 
+		// Personalize the email content with client data
+		personalizedContent := PersonalizeEmail(emailContent, clientData.Client, &server, &globalSettings)
+		personalizedSubject := PersonalizeEmail(emailSubject, clientData.Client, &server, &globalSettings)
+
 		cfgAtt := emailer.Attachment{Name: "wg0.conf", Data: []byte(config)}
 		var attachments []emailer.Attachment
 		if clientData.Client.PrivateKey != "" {
@@ -562,8 +687,8 @@ func EmailClient(db store.IStore, mailer emailer.Emailer, emailSubject, emailCon
 		err = mailer.Send(
 			clientData.Client.Name,
 			payload.Email,
-			emailSubject,
-			emailContent,
+			personalizedSubject,
+			personalizedContent,
 			attachments,
 		)
 
@@ -621,7 +746,7 @@ func SendTelegramClient(db store.IStore) echo.HandlerFunc {
 }
 
 // UpdateClient handler to update client information
-func UpdateClient(db store.IStore) echo.HandlerFunc {
+func UpdateClient(db store.IStore, mailer emailer.Emailer, emailSubject, emailContent string, autoEmail bool) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		var _client model.Client
 		c.Bind(&_client)
@@ -727,6 +852,60 @@ func UpdateClient(db store.IStore) echo.HandlerFunc {
 			return c.JSON(http.StatusInternalServerError, jsonHTTPResponse{false, err.Error()})
 		}
 		log.Infof("Updated client information successfully => %v", client)
+
+		// Auto-email the client configuration if enabled and email is provided
+		if autoEmail && client.Email != "" && mailer != nil {
+			go func() {
+				// Get global settings for personalization
+				globalSettings, _ := db.GetGlobalSettings()
+
+				// Personalize the email content
+				personalizedContent := PersonalizeEmail(emailContent, &client, &server, &globalSettings)
+				personalizedSubject := PersonalizeEmail(emailSubject, &client, &server, &globalSettings)
+
+				// Generate QR code settings
+				qrCodeSettings := model.QRCodeSettings{
+					Enabled:    true,
+					IncludeDNS: true,
+					IncludeMTU: true,
+				}
+				clientData, err := db.GetClientByID(client.ID, qrCodeSettings)
+				if err != nil {
+					log.Errorf("Cannot generate client config for auto-email: %v", err)
+					return
+				}
+
+				// Build config
+				config := util.BuildClientConfig(client, server, globalSettings)
+
+				cfgAtt := emailer.Attachment{Name: "wg0.conf", Data: []byte(config)}
+				var attachments []emailer.Attachment
+				if clientData.Client.PrivateKey != "" {
+					qrdata, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(clientData.QRCode, "data:image/png;base64,"))
+					if err != nil {
+						log.Errorf("Cannot decode QR code for auto-email: %v", err)
+						return
+					}
+					qrAtt := emailer.Attachment{Name: "wg.png", Data: qrdata}
+					attachments = []emailer.Attachment{cfgAtt, qrAtt}
+				} else {
+					attachments = []emailer.Attachment{cfgAtt}
+				}
+
+				err = mailer.Send(
+					clientData.Client.Name,
+					clientData.Client.Email,
+					personalizedSubject,
+					personalizedContent,
+					attachments,
+				)
+				if err != nil {
+					log.Errorf("Failed to send auto-email to client %s: %v", client.Email, err)
+				} else {
+					log.Infof("Auto-email sent successfully to client: %s", client.Email)
+				}
+			}()
+		}
 
 		return c.JSON(http.StatusOK, jsonHTTPResponse{true, "Updated client successfully"})
 	}
