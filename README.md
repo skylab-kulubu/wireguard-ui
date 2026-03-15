@@ -84,6 +84,10 @@ ReadWriteDirectories=/var/lib/wireguard-ui
 WantedBy=multi-user.target
 ```
 
+```bash
+systemctl enable --now wireugard-ui
+```
+
 ### Using docker compose
 
 The [examples/docker-compose](examples/docker-compose) folder contains example docker-compose files.
