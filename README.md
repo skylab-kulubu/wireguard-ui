@@ -30,6 +30,60 @@ Download the binary file from the release page and run it directly on the host m
 ./wireguard-ui
 ```
 
+### Using Systemd
+
+```ini
+# /etc/systemd/system/wireguard-ui.service
+[Unit]
+Description=wireguard-ui
+After=network-online.target
+Wants=network-online.target systemd-networkd-wait-online.service
+
+[Service]
+Restart=on-abnormal
+
+; User and group the process will run as.
+User=root
+Group=root
+Environment=BIND_ADDRESS=127.0.0.1:5000
+Environment=WGUI_DNS=10.19.11.1
+Environment=EMAIL_FROM_ADDRESS=mail@gmail.com
+Environment=EMAIL_FROM_NAME="SKY DAYS"
+Environment=SMTP_HOSTNAME=smtp.gmail.com
+Environment=SMTP_PORT=587
+Environment=SMTP_USERNAME=mail@gmail.com
+Environment=SMTP_PASSWORD="application password here"
+Environment=SMTP_AUTH_TYPE=LOGIN
+#Environment=SMTP_ENCRYPTION=NONE
+Environment=EMAIL_SUBJECT="SKYDAYS VPN"
+Environment=EMAIL_TEMPLATE_FILE=/opt/wireguard-ui/email-template.html
+Environment=WGUI_SERVER_INTERFACE_ADDRESSES="10.19.11.1/24"
+Environment=WGUI_SERVER_POST_UP_SCRIPT="iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE"
+Environment=WGUI_SERVER_POST_DOWN_SCRIPT="iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE"
+ExecStart=/usr/bin/wireguard-ui --data-dir="/var/lib/wireguard-ui"
+
+; Limit the number of file descriptors; see `man systemd.exec` for more limit settings.
+LimitNOFILE=1048576
+
+; Use private /tmp and /var/tmp, which are discarded after traefik stops.
+PrivateTmp=true
+; Use a minimal /dev (May bring additional security if switched to 'true', but it may not work on Raspberry Pi's or other devices, so it has been disabled in this dist.)
+;PrivateDevices=false
+; Hide /home, /root, and /run/user. Nobody will steal your SSH-keys.
+;ProtectHome=true
+; Make /usr, /boot, /etc and possibly some more folders read-only.
+;ProtectSystem=full
+ReadWriteDirectories=/var/lib/wireguard-ui
+
+; Note that you may have to add capabilities required by any plugins in use.
+;CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+;AmbientCapabilities=CAP_NET_BIND_SERVICE
+;NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
+```
+
 ### Using docker compose
 
 The [examples/docker-compose](examples/docker-compose) folder contains example docker-compose files.
