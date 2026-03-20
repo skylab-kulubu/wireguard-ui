@@ -20,6 +20,13 @@ A web user interface to manage your WireGuard setup.
 
 ## Run WireGuard-UI
 
+### Split Tunnel Essentials
+
+```bash
+sysctl -w net.ipv4.conf.all.route_localnet=1
+sysctl -w net.ipv4.ip_forward=1
+```
+
 > ⚠️The default username and password are `admin`. Please change it to secure your setup.
 
 ### Using binary file
